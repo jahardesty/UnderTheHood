@@ -14,6 +14,7 @@ final class HardwareMonitorViewModel: ObservableObject {
     @Published private(set) var gpuTemp: Double = 0
     @Published private(set) var fanRPM: Double = 0
     @Published private(set) var fanSpeedAvailable = false
+    @Published private(set) var cpuUsage: Double = 0
 
     private let sensorReader: SystemSensorReader?
     private var refreshTask: Task<Void, Never>?
@@ -34,6 +35,7 @@ final class HardwareMonitorViewModel: ObservableObject {
             gpuTemp = 0
             fanRPM = 0
             fanSpeedAvailable = false
+            cpuUsage = 0
             return
         }
 
@@ -42,6 +44,7 @@ final class HardwareMonitorViewModel: ObservableObject {
         gpuTemp = snapshot.gpuTempMax
         fanRPM = snapshot.fanSpeedRPM
         fanSpeedAvailable = snapshot.fanSpeedAvailable
+        cpuUsage = snapshot.cpuUsage
     }
 
     private func startRefreshing() {

@@ -8,6 +8,7 @@
 #import "HardwareMonitorBridge.h"
 #import <IOKit/IOKitLib.h>
 #import <IOKit/hidsystem/IOHIDServiceClient.h>
+#import <mach/mach_host.h>
 
 typedef struct __IOHIDEvent *IOHIDEventRef;
 typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
@@ -146,10 +147,12 @@ static double SMCFanRPMValue(SMCParamStruct value) {
         if (!service) {
             service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"));
         }
+        kern_return_t openResult = KERN_FAILURE;
         if (service) {
             IOServiceOpen(service, mach_task_self_, kSMCUserClientOpen, &smcConnection);
             IOObjectRelease(service);
         }
+        NSLog(@"IOServiceOpen returned %d, smcConnection = %u", openResult, smcConnection);
     }
     return self;
 }
@@ -190,12 +193,70 @@ static double SMCFanRPMValue(SMCParamStruct value) {
     }
 
     if (smcConnection) {
-        SMCParamStruct fanValue = {0};
-        if (SMCReadKey(smcConnection, "F0Ac", &fanValue) == KERN_SUCCESS) {
-            snapshot.fanSpeedRPM = SMCFanRPMValue(fanValue);
-            snapshot.fanSpeedAvailable = true;
+        // --- Fan Speed Aggregation ---
+        const char *fanKeys[] = {"F0Ac", "F1Ac", "F2Ac", "F3Ac"};
+        double totalFanRPM = 0;
+        int fanCount = 0;
+        for (int i = 0; i < 4; i++) {
+            SMCParamStruct fanValue = {0};
+            if (SMCReadKey(smcConnection, fanKeys[i], &fanValue) == KERN_SUCCESS) {
+                double rpm = SMCFanRPMValue(fanValue);
+                NSLog(@"Fan key %s: %.1f RPM", fanKeys[i], rpm);
+                if (rpm > 0) {
+                    totalFanRPM += rpm;
+                    fanCount++;
+                }
+            } else {
+                NSLog(@"Fan key %s: unavailable", fanKeys[i]);
+            }
         }
+        if (fanCount > 0) {
+            snapshot.fanSpeedRPM = totalFanRPM;
+            snapshot.fanSpeedAvailable = true;
+        } else {
+            snapshot.fanSpeedRPM = 0;
+            snapshot.fanSpeedAvailable = false;
+        }
+        // --- End Fan Speed Aggregation ---
     }
+    
+    // --- CPU Usage Calculation ---
+    static uint64_t lastTotalTicks = 0, lastIdleTicks = 0;
+    uint64_t totalTicks = 0, idleTicks = 0;
+
+    natural_t cpuCount;
+    processor_info_array_t cpuInfo;
+    mach_msg_type_number_t numCpuInfo;
+    kern_return_t kr = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpuCount, &cpuInfo, &numCpuInfo);
+
+    if (kr == KERN_SUCCESS) {
+        for (natural_t i = 0; i < cpuCount; i++) {
+            integer_t *cpu = (integer_t *)(cpuInfo + (CPU_STATE_MAX * i));
+            idleTicks += cpu[CPU_STATE_IDLE];
+            totalTicks += cpu[CPU_STATE_IDLE] + cpu[CPU_STATE_USER] + cpu[CPU_STATE_SYSTEM] + cpu[CPU_STATE_NICE];
+        }
+        static BOOL first = YES;
+        if (first) {
+            first = NO;
+            lastTotalTicks = totalTicks;
+            lastIdleTicks = idleTicks;
+            snapshot.cpuUsage = 0;
+        } else {
+            uint64_t totalDelta = totalTicks - lastTotalTicks;
+            uint64_t idleDelta = idleTicks - lastIdleTicks;
+            if (totalDelta > 0) {
+                snapshot.cpuUsage = 100.0 * (double)(totalDelta - idleDelta) / (double)totalDelta;
+            } else {
+                snapshot.cpuUsage = 0;
+            }
+            lastTotalTicks = totalTicks;
+            lastIdleTicks = idleTicks;
+        }
+        vm_deallocate(mach_task_self(), (vm_address_t)cpuInfo, numCpuInfo * sizeof(integer_t));
+    } else {
+        snapshot.cpuUsage = 0;
+    }
+    // --- End CPU Usage Calculation ---
     
     return snapshot;
 }
@@ -206,3 +267,4 @@ static double SMCFanRPMValue(SMCParamStruct value) {
 }
 
 @end
+

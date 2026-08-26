@@ -19,6 +19,9 @@ struct UnderTheHoodApp: App {
                 Image(systemName: "cpu")
                 Text(viewModel.cpuTemp > 0 ? String(format: "%.0f°C", viewModel.cpuTemp) : "--°C")
                     .font(.system(.caption, design: .monospaced))
+                Spacer(minLength: 4)
+                Text(viewModel.cpuUsage > 0 ? String(format: "%.0f%%", viewModel.cpuUsage) : "--%")
+                    .font(.system(.caption, design: .monospaced))
             }
         }
         .menuBarExtraStyle(.window)

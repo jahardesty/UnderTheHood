@@ -11,6 +11,8 @@ typedef struct {
     double cpuTempMax;
     double gpuTempMax;
     double fanSpeedRPM;
+    double cpuUsage;
+    double gpuUsage;
     bool fanSpeedAvailable;
 } HardwareSnapshot;
 

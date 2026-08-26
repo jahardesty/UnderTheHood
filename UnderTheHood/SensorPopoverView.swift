@@ -26,6 +26,13 @@ struct SensorPopoverView: View {
             )
             
             MetricRow(
+                icon: "gauge",
+                label: "CPU Usage",
+                value: String(format: "%.1f%%", viewModel.cpuUsage),
+                color: .accentColor
+            )
+            
+            MetricRow(
                 icon: "gpu",
                 label: "GPU Temp",
                 value: String(format: "%.1f °C", viewModel.gpuTemp),
@@ -91,3 +98,4 @@ struct MetricRow: View {
         }
     }
 }
+
