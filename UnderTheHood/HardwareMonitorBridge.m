@@ -149,12 +149,12 @@ static double SMCFanRPMValue(SMCParamStruct value) {
         if (!service) {
             service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMCKeysEndpoint"));
         }
-        kern_return_t openResult = KERN_FAILURE;
+        //kern_return_t openResult = KERN_FAILURE;
         if (service) {
             IOServiceOpen(service, mach_task_self_, kSMCUserClientOpen, &smcConnection);
             IOObjectRelease(service);
         }
-        NSLog(@"IOServiceOpen returned %d, smcConnection = %u", openResult, smcConnection);
+       // NSLog(@"IOServiceOpen returned %d, smcConnection = %u", openResult, smcConnection);
     }
     return self;
 }

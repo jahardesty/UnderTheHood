@@ -20,13 +20,15 @@ final class HardwareMonitorViewModel: ObservableObject {
     @Published private(set) var hasBattery: Bool = false
     @Published private(set) var batteryCycleCount: Int = 0
     @Published private(set) var batteryHealth: String = ""
+    @Published private(set) var memoryUsageGB: Double = 0
+    @Published private(set) var memoryTotalGB: Double = 0
+    @Published private(set) var memoryPercentage: Double = 0
 
     private let sensorReader: SystemSensorReader?
     private var refreshTask: Task<Void, Never>?
 
     init(sensorReader: SystemSensorReader? = SystemSensorReader()) {
         self.sensorReader = sensorReader
-        // Defer method calls that use self until after initialization completes
         Task { @MainActor [weak self] in
             self?.refreshMetrics()
             self?.startRefreshing()
@@ -38,6 +40,11 @@ final class HardwareMonitorViewModel: ObservableObject {
     }
 
     func refreshMetrics() {
+        let mem = MemoryReader.fetchMetrics()
+        memoryUsageGB = mem.usedGB
+        memoryTotalGB = mem.totalGB
+        memoryPercentage = mem.usagePercentage
+        
         guard let sensorReader else {
             cpuTemp = 0
             gpuTemp = 0
@@ -45,6 +52,7 @@ final class HardwareMonitorViewModel: ObservableObject {
             fanSpeedAvailable = false
             cpuUsage = 0
             chipModel = ""
+            hasBattery = false
             batteryCycleCount = 0
             batteryHealth = ""
             return
@@ -56,25 +64,29 @@ final class HardwareMonitorViewModel: ObservableObject {
         fanRPM = snapshot.fanSpeedRPM
         fanSpeedAvailable = snapshot.fanSpeedAvailable
         cpuUsage = snapshot.cpuUsage
+        
         chipModel = withUnsafePointer(to: snapshot.chipModel) {
             $0.withMemoryRebound(to: CChar.self, capacity: 64) {
                 String(cString: $0)
             }
         }
-        hasBattery = snapshot.batteryPresent
-        if snapshot.batteryPresent {
-            // If your snapshot includes these fields, assign them; otherwise defaults remain
+        
+        // Safely extract C boolean flag
+        let isPresent = snapshot.batteryPresent
+        hasBattery = isPresent
+        
+        if isPresent {
             batteryCycleCount = Int(snapshot.batteryCycleCount)
-            batteryHealth = withUnsafePointer(to: snapshot.batteryHealth) {
+            let rawHealth = withUnsafePointer(to: snapshot.batteryHealth) {
                 $0.withMemoryRebound(to: CChar.self, capacity: 64) {
                     String(cString: $0)
                 }
             }
+            batteryHealth = rawHealth
         } else {
             batteryCycleCount = 0
             batteryHealth = ""
         }
-        
     }
 
     private func startRefreshing() {
@@ -86,4 +98,3 @@ final class HardwareMonitorViewModel: ObservableObject {
         }
     }
 }
-

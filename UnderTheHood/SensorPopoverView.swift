@@ -13,9 +13,9 @@ struct SensorPopoverView: View {
     @State private var isHoveringQuit = false
     
     var body: some View {
-        VStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Under The Hood")
-                .font(.headline)
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
             
             Divider()
@@ -41,11 +41,34 @@ struct SensorPopoverView: View {
                 color: temperatureColor(viewModel.gpuTemp)
             )
             
+            VStack(alignment: .leading, spacing: 8) {
+                MetricRow(
+                    icon: "memorychip",
+                    label: "Memory",
+                    value: String(format: "%.1f / %.1f GB", viewModel.memoryUsageGB, viewModel.memoryTotalGB),
+                    color: viewModel.memoryPercentage > 85 ? .orange : .purple
+                )
+                
+                // Optional: Progress bar indicator
+                Gauge(value: viewModel.memoryPercentage, in: 0...100) {
+                    EmptyView()
+                } currentValueLabel: {
+                    Text(String(format: "%.0f%%", viewModel.memoryPercentage))
+                        .font(.caption2)
+                }
+                .gaugeStyle(.accessoryLinear)
+                .tint(viewModel.memoryPercentage > 85 ? .orange : .purple)
+            }
+            
             Divider()
             
             // MARK: BATTERY
             if viewModel.hasBattery {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Battery")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
                     MetricRow(
                         icon: "battery.100percent",
                         label: "Cycle Count",
