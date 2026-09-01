@@ -16,14 +16,20 @@ struct UnderTheHoodApp: App {
             SensorPopoverView(viewModel: viewModel)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "cpu")
+                Image(systemName: "cross.case.fill")
                 Text(viewModel.cpuTemp > 0 ? String(format: "%.0f°C", viewModel.cpuTemp) : "--°C")
                     .font(.system(.caption, design: .monospaced))
                 Spacer(minLength: 4)
                 Text(viewModel.cpuUsage > 0 ? String(format: "%.0f%%", viewModel.cpuUsage) : "--%")
                     .font(.system(.caption, design: .monospaced))
             }
+            
         }
         .menuBarExtraStyle(.window)
-        }
+    
+    WindowGroup("Battery Details", id: "battery-details") {
+        BatteryDetailsView(viewModel: viewModel)
     }
+    .defaultSize(width: 360, height: 440)
+}
+}

@@ -9,6 +9,8 @@
 #import <IOKit/IOKitLib.h>
 #import <IOKit/hidsystem/IOHIDServiceClient.h>
 #import <mach/mach_host.h>
+#import <IOKit/ps/IOPowerSources.h>
+#include <sys/sysctl.h>
 
 typedef struct __IOHIDEvent *IOHIDEventRef;
 typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
@@ -191,7 +193,7 @@ static double SMCFanRPMValue(SMCParamStruct value) {
         }
         CFRelease(services);
     }
-
+    
     if (smcConnection) {
         // --- Fan Speed Aggregation ---
         const char *fanKeys[] = {"F0Ac", "F1Ac", "F2Ac", "F3Ac"};
@@ -223,12 +225,12 @@ static double SMCFanRPMValue(SMCParamStruct value) {
     // --- CPU Usage Calculation ---
     static uint64_t lastTotalTicks = 0, lastIdleTicks = 0;
     uint64_t totalTicks = 0, idleTicks = 0;
-
+    
     natural_t cpuCount;
     processor_info_array_t cpuInfo;
     mach_msg_type_number_t numCpuInfo;
     kern_return_t kr = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpuCount, &cpuInfo, &numCpuInfo);
-
+    
     if (kr == KERN_SUCCESS) {
         for (natural_t i = 0; i < cpuCount; i++) {
             integer_t *cpu = (integer_t *)(cpuInfo + (CPU_STATE_MAX * i));
@@ -257,6 +259,41 @@ static double SMCFanRPMValue(SMCParamStruct value) {
         snapshot.cpuUsage = 0;
     }
     // --- End CPU Usage Calculation ---
+    
+    // --- Battery Info Retrieval ---
+    snapshot.batteryPresent = false;
+    io_service_t batteryService = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"));
+    if (batteryService) {
+        CFDictionaryRef batteryPropertiesRef = NULL;
+        if (IORegistryEntryCreateCFProperties(batteryService, (CFMutableDictionaryRef *)&batteryPropertiesRef, kCFAllocatorDefault, 0) == KERN_SUCCESS && batteryPropertiesRef) {
+            NSDictionary *batteryProperties = CFBridgingRelease(batteryPropertiesRef);
+            NSNumber *cycleCountNum = batteryProperties[@"CycleCount"];
+            NSString *batteryHealthStr = batteryProperties[@"BatteryHealth"];
+            
+            if (cycleCountNum != nil && [cycleCountNum isKindOfClass:[NSNumber class]]) {
+                snapshot.batteryCycleCount = [cycleCountNum intValue];
+            }
+            if (batteryHealthStr != nil && [batteryHealthStr isKindOfClass:[NSString class]]) {
+                strncpy(snapshot.batteryHealth, [batteryHealthStr UTF8String], 31);
+                snapshot.batteryHealth[31] = '\0';
+            } else {
+                snapshot.batteryHealth[0] = '\0';
+            }
+            snapshot.batteryPresent = true;
+        }
+        IOObjectRelease(batteryService);
+    }
+    
+    // --- End Battery Info Retrieval ---
+    
+    char brandString[64] = "";
+    size_t size = sizeof(brandString);
+    if (sysctlbyname("machdep.cpu.brand_string", &brandString, &size, NULL, 0) == 0) {
+        strncpy(snapshot.chipModel, brandString, 63);
+        snapshot.chipModel[63] = '\0';
+    } else {
+        snapshot.chipModel[0] = '\0';
+    }
     
     return snapshot;
 }

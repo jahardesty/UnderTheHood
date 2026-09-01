@@ -9,12 +9,14 @@ import SwiftUI
 
 struct SensorPopoverView: View {
     @ObservedObject var viewModel: HardwareMonitorViewModel
+    @Environment(\.openWindow) private var openWindow // 1. Inject openWindow
+    @State private var isHoveringQuit = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .center, spacing: 12) {
             Text("Under The Hood")
                 .font(.headline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.primary)
             
             Divider()
             
@@ -33,25 +35,75 @@ struct SensorPopoverView: View {
             )
             
             MetricRow(
-                icon: "gpu",
+                icon: "cpu.fill",
                 label: "GPU Temp",
                 value: String(format: "%.1f °C", viewModel.gpuTemp),
                 color: temperatureColor(viewModel.gpuTemp)
             )
             
+            Divider()
+            
+            // MARK: BATTERY
+            if viewModel.hasBattery {
+                VStack(alignment: .leading, spacing: 8) {
+                    MetricRow(
+                        icon: "battery.100percent",
+                        label: "Cycle Count",
+                        value: String(viewModel.batteryCycleCount),
+                        color: .green
+                    )
+                    MetricRow(
+                        icon: "heart.circle",
+                        label: "Health",
+                        value: viewModel.batteryHealth.isEmpty ? "—" : viewModel.batteryHealth,
+                        color: .blue
+                    )
+                    
+                    // 2. Add "More Details" Button
+                    Button(action: {
+                        openWindow(id: "battery-details")
+                        NSApp.activate(ignoringOtherApps: true) // Brings new window to front
+                    }) {
+                        HStack {
+                            Text("More Details")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+            }
+            
+            Divider()
+            
             MetricRow(
-                icon: "fanblades",
-                label: "Fan Speed",
-                value: fanSpeedText,
-                color: .blue
+                icon: "macpro.gen1.fill",
+                label: "Model",
+                value: viewModel.chipModel,
+                color: .white
             )
             
             Divider()
             
             HStack {
                 Spacer()
-                Button("Quit UnderTheHood") {
+                Button {
                     NSApplication.shared.terminate(nil)
+                } label: {
+                    ZStack {
+                        Text("Quit")
+                            .opacity(isHoveringQuit ? 0 : 1)
+                        Image(systemName: "xmark.square")
+                            .opacity(isHoveringQuit ? 1 : 0)
+                            .font(.system(size: 18))
+                    }
+                    .frame(width: 40, height: 20)
+                }
+                .onHover { hovering in
+                    isHoveringQuit = hovering
                 }
                 .keyboardShortcut("q")
                 .buttonStyle(.borderless)
@@ -67,14 +119,6 @@ struct SensorPopoverView: View {
         case 65..<85: return .orange
         default: return .red
         }
-    }
-
-    private var fanSpeedText: String {
-        guard viewModel.fanSpeedAvailable else {
-            return "Unavailable"
-        }
-
-        return viewModel.fanRPM > 0 ? String(format: "%.0f RPM", viewModel.fanRPM) : "Stopped"
     }
 }
 
